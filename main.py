@@ -3,33 +3,49 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 
-st.title("Sales Prediction App")
+st.title("🛍️ Sales Prediction App")
 
 # CSV Upload
-uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
+uploaded_file = st.file_uploader("📂 Upload your CSV file", type=["csv"])
 
 if uploaded_file is not None:
-    # Read CSV
+    # Load the data
     df = pd.read_csv(uploaded_file)
-    st.subheader("Uploaded Data")
-    st.write(df)
+    
+    st.subheader("📄 Uploaded Data")
+    st.write(df.head())
 
-    # Simple check
-    if 'feature1' in df.columns and 'sales' in df.columns:
-        X = df[['feature1']]  # Example: change as per your features
-        y = df['sales']
+    st.write("🧾 Available columns:")
+    st.write(df.columns.tolist())
 
-        # Train-test split
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Let user select input features and target
+    with st.form("select_columns"):
+        st.subheader("🔧 Select Features and Target")
+        feature_cols = st.multiselect("Select feature columns (independent variables):", df.columns)
+        target_col = st.selectbox("Select target column (sales):", df.columns)
+        submitted = st.form_submit_button("Run Prediction")
 
-        # Model
-        model = LinearRegression()
-        model.fit(X_train, y_train)
+    if submitted:
+        if len(feature_cols) == 0:
+            st.error("Please select at least one feature column.")
+        elif target_col in feature_cols:
+            st.error("Target column should not be selected as a feature.")
+        else:
+            try:
+                # Prepare data
+                X = df[feature_cols]
+                y = df[target_col]
 
-        # Predict
-        df['predicted_sales'] = model.predict(X)
+                # Train a simple model
+                model = LinearRegression()
+                model.fit(X, y)
 
-        st.subheader("Predicted Sales")
-        st.write(df[['feature1', 'sales', 'predicted_sales']])
-    else:
-        st.error("CSV must contain 'feature1' and 'sales' columns for this demo.")
+                # Predict
+                df['Predicted_' + target_col] = model.predict(X)
+
+                st.subheader("📊 Prediction Results")
+                st.write(df[feature_cols + [target_col, 'Predicted_' + target_col]])
+            except Exception as e:
+                st.error(f"Error during prediction: {e}")
+else:
+    st.info("Please upload a CSV file to get started.")
