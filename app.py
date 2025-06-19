@@ -11,7 +11,7 @@ st.set_page_config(page_title="Retail Sales Prediction", page_icon="🛒", layou
 st.title("🛍️ Retail Sales Prediction App")
 
 # Load Hugging Face API token
-HF_TOKEN = st.secrets.get("HUGGINGFACEHUB_API_TOKEN", None)
+HF_TOKEN = st.secrets.get("HUGGINGFACE_TOKEN", None)
 if HF_TOKEN:
     qa_client = InferenceClient(token=HF_TOKEN)
 else:
