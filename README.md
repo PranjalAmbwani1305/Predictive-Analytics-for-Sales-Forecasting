@@ -65,23 +65,8 @@ This app was developed as part of a predictive analytics project aimed at foreca
 
 ---
 
-## 👨‍💻 Authors & Contributors
-
-- 💡 Project Intern Team  
-- 👨‍🏫 Mentors (for guidance and reviews)  
-- 🧾 Stakeholders (for requirements and feedback)
-
----
-
 ## 📜 License
 
 This project is for educational and demo purposes. No commercial license.
 
 ---
-
-## 🔗 References
-
-- [Pandas Docs](https://pandas.pydata.org/docs/)
-- [Scikit-learn Docs](https://scikit-learn.org/stable/)
-- [Streamlit Docs](https://docs.streamlit.io/)
-- [Kaggle Datasets](https://www.kaggle.com/datasets)
