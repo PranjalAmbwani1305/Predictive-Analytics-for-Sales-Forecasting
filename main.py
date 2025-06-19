@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from sklearn.linear_model import LinearRegression
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Sales Prediction App", layout="wide")
 st.title("🛍️ Sales Prediction App")
@@ -16,7 +17,7 @@ if uploaded_file is not None:
     st.write("🧾 Available columns:")
     st.write(df.columns.tolist())
 
-    # Keep only numeric columns for feature selection
+    # Filter numeric columns only
     numeric_cols = df.select_dtypes(include='number').columns.tolist()
 
     if not numeric_cols:
@@ -35,7 +36,7 @@ if uploaded_file is not None:
                 st.error("Target column cannot be one of the features.")
             else:
                 try:
-                    # Prepare data and drop NaNs
+                    # Prepare data
                     X = df[feature_cols]
                     y = df[target_col]
                     data = pd.concat([X, y], axis=1).dropna()
@@ -49,11 +50,25 @@ if uploaded_file is not None:
                     # Predict
                     data['Predicted_' + target_col] = model.predict(X)
 
-                    st.success("✅ Prediction completed successfully!")
+                    st.success("✅ Prediction completed!")
                     st.subheader("📊 Prediction Results")
                     st.write(data[feature_cols + [target_col, 'Predicted_' + target_col]])
 
+                    # Visualization
+                    st.subheader("📈 Actual vs Predicted")
+                    fig, ax = plt.subplots(figsize=(8, 5))
+                    ax.scatter(data[target_col], data['Predicted_' + target_col], alpha=0.6)
+                    ax.plot([data[target_col].min(), data[target_col].max()],
+                            [data[target_col].min(), data[target_col].max()],
+                            color='red', linestyle='--')
+                    ax.set_xlabel("Actual Sales")
+                    ax.set_ylabel("Predicted Sales")
+                    ax.set_title("Actual vs Predicted Sales")
+                    st.pyplot(fig)
+
+                    # Download option
                     st.download_button("📥 Download Predictions as CSV", data.to_csv(index=False), "predictions.csv", "text/csv")
+
                 except Exception as e:
                     st.error(f"❌ Error during prediction: {e}")
 else:
