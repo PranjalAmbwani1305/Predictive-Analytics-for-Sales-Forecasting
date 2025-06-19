@@ -1,103 +1,100 @@
 import streamlit as st
 import pandas as pd
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.metrics import mean_squared_error, r2_score
 import matplotlib.pyplot as plt
 from huggingface_hub import InferenceClient
+from requests.exceptions import HTTPError
 
-# ----------- Page Setup -----------
+# Page setup
 st.set_page_config(page_title="Retail Sales Prediction", page_icon="🛒", layout="wide")
 st.title("🛍️ Retail Sales Prediction App")
 
-# ----------- Hugging Face Inference Setup -----------
-
-# Make sure to set your token in an environment variable: HUGGINGFACEHUB_API_TOKEN
-HF_TOKEN = st.secrets.get("HUGGINGFACE_TOKEN", None)
-if not HF_TOKEN:
-    st.sidebar.error("❗ Hugging Face API token missing. Add HUGGINGFACEHUB_API_TOKEN to Streamlit secrets.")
-    qa_client = None
-else:
+# Load Hugging Face API token
+HF_TOKEN = st.secrets.get("HUGGINGFACEHUB_API_TOKEN", None)
+if HF_TOKEN:
     qa_client = InferenceClient(token=HF_TOKEN)
+else:
+    qa_client = None
+    st.sidebar.error("❗ Add `HUGGINGFACEHUB_API_TOKEN` in secrets for Q&A to work")
 
-# ----------- Sidebar: Q&A -----------
-
+# Sidebar - Q&A
 st.sidebar.header("❓ Ask a Question")
-user_query = st.sidebar.text_input("About the model or dataset:")
+user_question = st.sidebar.text_input("About the model or dataset:")
 
-if user_query:
+if user_question:
     if qa_client:
         context = """
         This app uses Linear Regression to predict retail sales based on numeric features.
-        R² Score tells how well predictions match actual values: 1.0 = perfect.
-        Mean Squared Error is the average squared prediction error (lower is better).
+        R² Score measures how well predictions match the actual sales; closer to 1 is better.
+        Mean Squared Error is the average squared difference between actual and predicted values (lower is better).
         """
         try:
-            result = qa_client.text_generation(
-                user_query,
-                model="deepset/roberta-base-squad2",
-                max_new_tokens=150
+            answer = qa_client.question_answering(
+                question=user_question,
+                context=context,
+                model="deepset/roberta-base-squad2"
             )
-            answer = result[0]["generated_text"]
-            st.sidebar.success(f"💡 Answer: {answer}")
-        except Exception as e:
-            st.sidebar.error("❌ QA request failed. Try again.")
+            st.sidebar.success(f"💡 Answer: {answer['answer']}")
+        except HTTPError as e:
+            st.sidebar.error("❌ QA request failed. Please try a different question.")
     else:
-        st.sidebar.info("📴 QA is offline—please check your API token.")
+        st.sidebar.info("🛠️ QA not available—missing API token.")
 
-# ----------- Main App: Upload and Predict -----------
-
+# Upload CSV and prediction logic
 uploaded_file = st.file_uploader("📂 Upload your CSV file", type=["csv"])
+
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
     st.subheader("🧾 Uploaded Data Preview")
     st.dataframe(df.head(), use_container_width=True)
 
-    numeric_cols = df.select_dtypes(include="number").columns.tolist()
+    numeric_cols = df.select_dtypes(include='number').columns.tolist()
     if not numeric_cols:
-        st.error("❌ No numeric columns found.")
+        st.error("❌ No numeric columns for modeling.")
     else:
         with st.form("model_form"):
-            st.subheader("⚙️ Choose inputs")
-            features = st.multiselect("Features:", numeric_cols)
-            target = st.selectbox("Target:", numeric_cols)
+            st.subheader("⚙️ Select Features & Target")
+            feature_cols = st.multiselect("Features:", numeric_cols)
+            target_col = st.selectbox("Target:", numeric_cols)
             submit = st.form_submit_button("🚀 Predict")
 
         if submit:
-            if not features:
+            if not feature_cols:
                 st.error("Select at least one feature.")
-            elif target in features:
-                st.error("Target can't be one of the features.")
+            elif target_col in feature_cols:
+                st.error("Target cannot be among features.")
             else:
-                data = df[features + [target]].dropna()
-                X, y = data[features], data[target]
+                data = df[feature_cols + [target_col]].dropna()
+                X, y = data[feature_cols], data[target_col]
                 model = LinearRegression().fit(X, y)
                 data["Predicted"] = model.predict(X)
-
+                
                 r2 = r2_score(y, data["Predicted"])
                 mse = mean_squared_error(y, data["Predicted"])
-                fit_msg = (
-                    "🟢 Excellent fit" if r2 >= 0.75 else
-                    "🟡 Moderate fit" if r2 >= 0.5 else
+                fit_label = (
+                    "🟢 Excellent fit" if r2 > 0.75 else
+                    "🟡 Moderate fit" if r2 > 0.40 else
                     "🔴 Poor fit"
                 )
 
-                st.success(f"📈 R²: {r2:.4f} ({fit_msg})")
-                st.info(f"📉 MSE: {mse:,.2f}")
+                st.success(f"📈 R² Score: {r2:.4f} ({fit_label})")
+                st.info(f"📉 Mean Squared Error: {mse:,.2f}")
 
-                st.subheader("📋 Results")
+                st.subheader("📋 Prediction Results")
                 st.dataframe(data, use_container_width=True)
 
-                fig, ax = plt.subplots(figsize=(8, 5))
+                st.subheader("📈 Actual vs Predicted")
+                fig, ax = plt.subplots(figsize=(8,5))
                 ax.scatter(y, data["Predicted"], alpha=0.6)
-                ax.plot([y.min(), y.max()], [y.min(), y.max()], "r--")
-                ax.set(xlabel="Actual", ylabel="Predicted")
+                ax.plot([y.min(), y.max()], [y.min(), y.max()], 'r--')
+                ax.set_xlabel("Actual")
+                ax.set_ylabel("Predicted")
                 st.pyplot(fig)
 
-                csv = data.to_csv(index=False)
-                st.download_button("📥 Download CSV", csv, "predictions.csv", "text/csv")
+                csv_data = data.to_csv(index=False)
+                st.download_button("📥 Download Results", csv_data, "predictions.csv", "text/csv")
 else:
-    st.info("📁 Upload a CSV to begin.")
+    st.info("📁 Upload a CSV file to get started.")
 
-# ----------- Footer -----------
 st.markdown("---")
-st.markdown("🔗 [Repo](https://github.com/KOdoi-OJ/CF_Time_Series_Forecasting_Project) &bull; Made with ❤️ by KME")
