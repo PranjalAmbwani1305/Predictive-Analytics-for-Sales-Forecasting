@@ -12,7 +12,7 @@ st.title("🛍️ Retail Sales Prediction App")
 # ----------- Hugging Face Inference Setup -----------
 
 # Make sure to set your token in an environment variable: HUGGINGFACEHUB_API_TOKEN
-HF_TOKEN = st.secrets.get(HUGGINGFACE_TOKEN", None)
+HF_TOKEN = st.secrets.get("HUGGINGFACE_TOKEN", None)
 if not HF_TOKEN:
     st.sidebar.error("❗ Hugging Face API token missing. Add HUGGINGFACEHUB_API_TOKEN to Streamlit secrets.")
     qa_client = None
