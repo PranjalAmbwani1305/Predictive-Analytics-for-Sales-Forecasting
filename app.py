@@ -20,6 +20,7 @@ def load_qa_pipeline():
         return None
 
 qa_pipeline = load_qa_pipeline()
+qa = pipeline("question-answering", model="deepset/roberta-base-squad2")
 
 # App UI setup
 st.set_page_config(page_title="Sales Prediction App", layout="wide")
