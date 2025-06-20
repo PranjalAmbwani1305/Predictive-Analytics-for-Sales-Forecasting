@@ -1,141 +1,140 @@
 import streamlit as st
 import pandas as pd
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error, r2_score
+import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score, mean_squared_error
 from transformers import pipeline
+import os
 
-# ----------------------- SETUP -----------------------
-st.set_page_config(page_title="Sales Prediction App", layout="wide")
-st.title("🛍️ Sales Prediction App")
+st.set_page_config(page_title="📈 Sales Prediction Dashboard", layout="wide")
 
-# ------------------- LOAD QA MODEL --------------------
+# Set dark theme-style appearance
+st.markdown("""
+    <style>
+        .main { background-color: #0e1117; color: white; }
+        .css-1d391kg { background-color: #262730; }
+        .css-1lcbmhc, .st-bw, .st-cj { color: white !important; }
+        .stSelectbox>div>div>div>div { color: black !important; }
+    </style>
+""", unsafe_allow_html=True)
+
+# Sidebar
+st.sidebar.title("🛠️ Filters")
+uploaded_file = st.sidebar.file_uploader("📂 Upload CSV file", type=["csv"])
+
+# Hugging Face QA Pipeline
 @st.cache_resource
 def load_qa_pipeline():
     try:
-        return pipeline("question-answering", model="deepset/roberta-base-squad2", token=st.secrets["HUGGINGFACE_TOKEN"])
+        from transformers import pipeline
+        token = st.secrets["HUGGINGFACE_TOKEN"]
+        return pipeline("question-answering", model="deepset/roberta-base-squad2", token=token)
     except:
         return None
 
 qa_pipeline = load_qa_pipeline()
 
-# -------------------- SIDEBAR QA ----------------------
-st.sidebar.header("💡 Dataset / Model Queries")
-question = st.sidebar.text_input("Ask a question about the model or dataset:")
+# Main Title
+st.title("📊 Sales Forecasting Dashboard")
+st.write("Upload your dataset and select features to forecast sales using a linear regression model.")
 
-if question:
-    if qa_pipeline is None:
-        st.sidebar.warning("⚠️ QA system not available (check Hugging Face token or internet connection).")
-    else:
-        context = """
-        R² Score (Coefficient of Determination) measures how well predictions approximate actual values.
-        RMSE (Root Mean Squared Error) is the square root of the average of squared differences between predicted and actual values.
-        In Linear Regression, the model finds the best linear relationship between selected features and the target.
-        """
-        result = qa_pipeline(question=question, context=context)
-        st.sidebar.success("💡 Answer: " + result['answer'])
-
-# ------------------- FILE UPLOAD ----------------------
-uploaded_file = st.file_uploader("📂 Upload your CSV file", type=["csv"])
-
-if uploaded_file is not None:
+# Process CSV
+if uploaded_file:
     df = pd.read_csv(uploaded_file)
-    st.subheader("📄 Uploaded Data")
-    st.write(df.head())
 
-    st.write("🧾 Available Columns:")
-    st.write(df.columns.tolist())
+    st.subheader("🔍 Uploaded Data")
+    st.dataframe(df.head())
 
-    numeric_cols = df.select_dtypes(include='number').columns.tolist()
+    with st.sidebar:
+        all_columns = df.columns.tolist()
+        numeric_cols = df.select_dtypes(include='number').columns.tolist()
 
-    with st.form("select_columns"):
-        st.subheader("🔧 Select Features and Target")
-        feature_cols = st.multiselect("Select feature columns:", df.columns.tolist())
-        target_col = st.selectbox("Select target column:", numeric_cols)
-        submitted = st.form_submit_button("🚀 Run Prediction")
+        feature_cols = st.multiselect("Select feature columns:", options=all_columns)
+        target_col = st.selectbox("Select target column:", options=numeric_cols)
 
-    if submitted:
-        if not feature_cols:
-            st.error("Please select at least one feature column.")
-        elif target_col in feature_cols:
-            st.error("Target column cannot be one of the features.")
-        elif df[target_col].dtype == 'object':
-            st.error("Target column must be numeric.")
-        else:
+    # Remove target from feature list if included
+    if target_col in feature_cols:
+        feature_cols.remove(target_col)
+
+    # Run prediction
+    if feature_cols and target_col:
+        try:
+            data = df[feature_cols + [target_col]].dropna()
+            X = data[feature_cols]
+            y = data[target_col]
+
+            model = LinearRegression()
+            model.fit(X, y)
+            predictions = model.predict(X)
+            data["Predicted"] = predictions
+
+            r2 = r2_score(y, predictions)
+            mse = mean_squared_error(y, predictions)
+
+            # Metrics
+            st.subheader("📈 Model Performance")
+            col1, col2 = st.columns(2)
+            col1.metric("R² Score", f"{r2:.4f}", "✅ Good fit" if r2 > 0.7 else "⚠️ Poor fit")
+            col2.metric("MSE", f"{mse:,.2f}")
+
+            # Plot
+            st.subheader("📊 Prediction vs Actual")
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.scatter(y, predictions, alpha=0.7)
+            ax.plot([y.min(), y.max()], [y.min(), y.max()], color='red', linestyle='--')
+            ax.set_xlabel("Actual")
+            ax.set_ylabel("Predicted")
+            ax.set_title("Actual vs Predicted Sales")
+            st.pyplot(fig)
+
+            # Result Table
+            st.subheader("📋 Prediction Results")
+            st.dataframe(data[feature_cols + [target_col, "Predicted"]])
+
+            # Custom Prediction Input
+            with st.expander("🧪 Predict Custom Values"):
+                custom_input = {}
+                for col in feature_cols:
+                    val = st.text_input(f"Enter value for {col}:", value=str(df[col].iloc[0]))
+                    try:
+                        val = float(val)
+                    except:
+                        val = 0.0
+                    custom_input[col] = val
+
+                if st.button("🚀 Predict Custom Values"):
+                    input_df = pd.DataFrame([custom_input])
+                    result = model.predict(input_df)[0]
+                    st.success(f"📌 Predicted {target_col}: {result:.2f}")
+
+        except Exception as e:
+            st.error(f"❌ Error during prediction: {e}")
+    else:
+        st.warning("Please select valid features and a numeric target column.")
+
+    # QA SYSTEM
+    st.sidebar.title("💬 Dataset / Model Queries")
+    question = st.sidebar.text_input("Ask a question about the model or dataset:")
+
+    if question:
+        if qa_pipeline:
+            context = " ".join([f"{col}: {str(df[col].iloc[0])}" for col in df.columns])
             try:
-                data = df[feature_cols + [target_col]].dropna()
-                X = data[feature_cols]
-                y = data[target_col]
-
-                model = LinearRegression()
-                model.fit(X, y)
-                predictions = model.predict(X)
-
-                data['Predicted_' + target_col] = predictions
-                r2 = r2_score(y, predictions)
-                mse = mean_squared_error(y, predictions)
-                rmse = mean_squared_error(y, predictions, squared=False)
-
-                st.success("✅ Prediction completed!")
-
-                # Summary
-                st.markdown(f"""
-                ### 📈 Model Performance
-                - **R² Score:** {r2:.4f} ({"Good fit" if r2 > 0.7 else "Poor fit"})
-                - **RMSE:** {rmse:.2f}
-                - **MSE:** {mse:.2f}
-                """)
-
-                # Results
-                st.subheader("📊 Prediction Results")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("**🧠 Features & Target**")
-                    st.dataframe(data[feature_cols + [target_col]])
-                with col2:
-                    st.markdown("**🎯 Predictions**")
-                    st.dataframe(data[['Predicted_' + target_col]])
-
-                # Graph
-                st.subheader("📉 Actual vs Predicted")
-                fig, ax = plt.subplots(figsize=(8, 5))
-                ax.scatter(y, predictions, alpha=0.6)
-                ax.plot([y.min(), y.max()], [y.min(), y.max()], color='red', linestyle='--')
-                ax.set_xlabel("Actual")
-                ax.set_ylabel("Predicted")
-                ax.set_title("Actual vs Predicted Values")
-                st.pyplot(fig)
-
-                # Download
-                st.download_button("📥 Download Results", data.to_csv(index=False), "predictions.csv", "text/csv")
-
-                # Custom Input Prediction
-                st.subheader("🧪 Predict Custom Values")
-                with st.form("custom_input"):
-                    inputs = {}
-                    for col in feature_cols:
-                        value = st.text_input(f"{col}:", value=str(df[col].mean()))
-                        try:
-                            inputs[col] = float(value)
-                        except:
-                            st.error(f"Invalid value for {col}.")
-                    predict_btn = st.form_submit_button("Predict Custom Values")
-
-                if predict_btn:
-                    input_df = pd.DataFrame([inputs])
-                    custom_pred = model.predict(input_df)[0]
-                    st.success(f"📌 Predicted {target_col}: {custom_pred:.2f}")
-
-            except Exception as e:
-                st.error(f"❌ Error during prediction: {e}")
+                answer = qa_pipeline(question=question, context=context)
+                st.sidebar.markdown(f"💡 **Answer:** {answer['answer']}")
+            except Exception:
+                st.sidebar.warning("⚠️ QA request failed. Try again.")
+        else:
+            st.sidebar.warning("⚠️ QA system not available (check Hugging Face token or internet connection).")
 
 else:
-    st.info("Upload a CSV file to get started.")
+    st.info("Please upload a CSV file to begin.")
 
-# ----------------- REMOVE FOOTER -------------------
+# Remove Streamlit footer and hamburger
 st.markdown("""
     <style>
+        #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        header {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
