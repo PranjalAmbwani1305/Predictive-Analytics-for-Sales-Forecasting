@@ -2,53 +2,54 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score, mean_squared_error
 
-st.set_page_config(page_title="📈 Sales Forecasting Dashboard", layout="wide")
+st.set_page_config(page_title="📈 Sales Forecasting App", layout="wide")
 
-# Dark theme styles
+# Custom Style
 st.markdown("""
     <style>
         .main { background-color: #0e1117; color: white; }
-        .css-1d391kg { background-color: #262730; }
-        .css-1lcbmhc, .st-bw, .st-cj { color: white !important; }
-        .stSelectbox>div>div>div>div { color: black !important; }
-        #MainMenu, footer {visibility: hidden;}
+        .stSelectbox label, .stTextInput label, .stMultiselect label {
+            color: #ffffff !important;
+            font-weight: bold;
+        }
+        .stMetric { font-size: 1.2em; }
+        .reportview-container .main footer {visibility: hidden;}
+        #MainMenu {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
-# Sidebar: File Upload
-st.sidebar.title("🛠️ Upload & Configure")
-uploaded_file = st.sidebar.file_uploader("📂 Upload CSV file", type=["csv"])
+st.title("📊 Sales Forecasting Dashboard")
+st.write("Upload your dataset, choose features, and predict sales using Linear Regression.")
 
-# App Header
-st.title("📊 Sales Forecasting with Linear Regression")
-st.write("Upload your dataset, select feature and target columns, and forecast sales with visual insights.")
+uploaded_file = st.file_uploader("📂 Upload your CSV file", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
+    st.subheader("📄 Uploaded Data Preview")
+    st.dataframe(df.head())
 
-    st.subheader("🔍 Uploaded Data")
-    st.dataframe(df.head(), use_container_width=True)
+    all_columns = df.columns.tolist()
+    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
 
-    # Sidebar Config
-    with st.sidebar:
-        all_columns = df.columns.tolist()
-        numeric_cols = df.select_dtypes(include='number').columns.tolist()
+    st.markdown("---")
+    st.subheader("🔧 Feature & Target Selection")
 
-        feature_cols = st.multiselect("Select feature columns:", options=all_columns)
-        target_col = st.selectbox("Select target column:", options=numeric_cols)
+    col1, col2 = st.columns(2)
+    with col1:
+        feature_cols = st.multiselect("✅ Select feature columns:", options=all_columns)
+    with col2:
+        target_col = st.selectbox("🎯 Select target column (numeric only):", options=numeric_cols)
 
-    # Avoid selecting target in features
     if target_col in feature_cols:
         feature_cols.remove(target_col)
 
     if feature_cols and target_col:
         try:
             data = df[feature_cols + [target_col]].dropna()
-            X = pd.get_dummies(data[feature_cols], drop_first=True)
+            X = data[feature_cols]
             y = data[target_col]
 
             model = LinearRegression()
@@ -59,56 +60,52 @@ if uploaded_file:
             r2 = r2_score(y, predictions)
             mse = mean_squared_error(y, predictions)
 
-            # Performance Metrics
-            st.subheader("📈 Model Performance")
+            st.markdown("---")
+            st.subheader("📊 Model Performance")
             col1, col2 = st.columns(2)
             col1.metric("R² Score", f"{r2:.4f}", "✅ Good fit" if r2 > 0.7 else "⚠️ Poor fit")
             col2.metric("Mean Squared Error", f"{mse:,.2f}")
 
-            # Improved Prediction vs Actual Plot
-            st.subheader("📊 Prediction vs Actual Sales")
+            st.markdown("---")
+            st.subheader("📈 Actual vs Predicted Sales")
             fig, ax = plt.subplots(figsize=(8, 5))
-            sns.regplot(x=y, y=predictions, ci=None, line_kws={"color": "red"}, scatter_kws={'alpha':0.6})
+            ax.scatter(y, predictions, alpha=0.7, label="Predicted vs Actual")
+            ax.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', lw=2, label="Perfect Fit")
             ax.set_xlabel("Actual Sales")
             ax.set_ylabel("Predicted Sales")
-            ax.set_title("Actual vs Predicted Sales using Linear Regression")
-            ax.grid(True)
+            ax.set_title("Actual vs Predicted Comparison")
+            ax.legend()
             st.pyplot(fig)
 
-            # Styled Prediction Table
-            st.subheader("📋 Prediction Results")
-            styled_data = data[feature_cols + [target_col, "Predicted"]].copy()
-            st.dataframe(
-                styled_data.style.format("{:.2f}", subset=[target_col, "Predicted"]),
-                use_container_width=True
-            )
+            st.markdown("---")
+            st.subheader("📋 Prediction Results Table")
+            styled_table = data[feature_cols + [target_col, "Predicted"]].style.format("{:.2f}", subset=["Predicted"])
+            st.dataframe(styled_table, use_container_width=True)
 
-            # Better Custom Input Form
-            st.subheader("🧪 Predict with Custom Input")
-            with st.form("custom_input_form"):
-                custom_values = {}
-                cols = st.columns(min(3, len(feature_cols)))  # layout in columns
-                for idx, col in enumerate(feature_cols):
-                    with cols[idx % len(cols)]:
-                        val = st.text_input(f"{col}", value=str(df[col].iloc[0]))
-                        try:
-                            val = float(val)
-                        except:
-                            val = 0.0
-                        custom_values[col] = val
+            # Custom Input
+            st.markdown("---")
+            with st.expander("🧪 Predict Custom Input"):
+                st.markdown("Enter values below to predict a custom sale output.")
+                custom_inputs = {}
+                for col in feature_cols:
+                    default_val = df[col].iloc[0] if pd.api.types.is_numeric_dtype(df[col]) else ""
+                    value = st.text_input(f"{col}:", value=str(default_val))
+                    try:
+                        value = float(value)
+                    except:
+                        value = 0.0
+                    custom_inputs[col] = value
 
-                submit = st.form_submit_button("🚀 Predict Custom Value")
-
-            if submit:
-                input_df = pd.DataFrame([custom_values])
-                input_df = pd.get_dummies(input_df)
-                input_df = input_df.reindex(columns=X.columns, fill_value=0)
-                prediction = model.predict(input_df)[0]
-                st.success(f"📌 Predicted {target_col}: **{prediction:.2f}**")
+                if st.button("🚀 Predict Custom Values"):
+                    input_df = pd.DataFrame([custom_inputs])
+                    result = model.predict(input_df)[0]
+                    st.success(f"📌 Predicted {target_col}: **{result:.2f}**")
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
     else:
-        st.warning("⚠️ Please select valid feature(s) and a numeric target column.")
+        st.warning("⚠️ Please select at least one feature and a numeric target column.")
+
 else:
-    st.info("📤 Upload a CSV file from the sidebar to start.")
+    st.info("📤 Upload a CSV file to get started.")
