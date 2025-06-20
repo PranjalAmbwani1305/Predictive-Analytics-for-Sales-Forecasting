@@ -57,13 +57,26 @@ if uploaded_file is not None:
                     # Visualization
                     st.subheader("📈 Actual vs Predicted")
                     fig, ax = plt.subplots(figsize=(8, 5))
-                    ax.scatter(data[target_col], data['Predicted_' + target_col], alpha=0.6)
-                    ax.plot([data[target_col].min(), data[target_col].max()],
-                            [data[target_col].min(), data[target_col].max()],
-                            color='red', linestyle='--')
+                    # Scatter: Predicted vs Actual (blue)
+                    scatter = ax.scatter(
+                        data[target_col],
+                        data['Predicted_' + target_col],
+                        alpha=0.7,
+                        color='skyblue',
+                        edgecolor='black',
+                        label='Predicted Points'
+                    )
+                    # Line: y = x (Ideal line)
+                    min_val = min(data[target_col].min(), data['Predicted_' + target_col].min())
+                    max_val = max(data[target_col].max(), data['Predicted_' + target_col].max())
+                    ax.plot([min_val, max_val], [min_val, max_val], color='red', linestyle='--', label='Ideal Line (y = x)')
+                    # Axes and legend
+                    ax.set_xlim(min_val, max_val)
+                    ax.set_ylim(min_val, max_val)
                     ax.set_xlabel("Actual Sales")
                     ax.set_ylabel("Predicted Sales")
                     ax.set_title("Actual vs Predicted Sales")
+                    ax.legend(loc='upper left')  # Add legend box
                     st.pyplot(fig)
 
                     # Download option
