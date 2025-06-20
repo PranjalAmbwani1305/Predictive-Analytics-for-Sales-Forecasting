@@ -5,33 +5,37 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score, mean_squared_error
 
-st.set_page_config(page_title="📈 Sales Forecasting App", layout="wide")
+st.set_page_config(page_title="📈 Sales Prediction Dashboard", layout="wide")
 
-# Custom Style
+# 🌙 Dark theme styling
 st.markdown("""
     <style>
         .main { background-color: #0e1117; color: white; }
-        .stSelectbox label, .stTextInput label, .stMultiselect label {
-            color: #ffffff !important;
-            font-weight: bold;
-        }
-        .stMetric { font-size: 1.2em; }
-        .reportview-container .main footer {visibility: hidden;}
-        #MainMenu {visibility: hidden;}
+        .st-bw, .st-cj, .st-bo { color: white !important; }
+        .stSelectbox>div>div>div>div { color: black !important; }
+        .css-1v0mbdj p { color: white; }
+        .css-1y4p8pa { color: white; }
+        .stButton button { background-color: #4CAF50; color: white; }
+        .stTextInput>div>div>input { background-color: #262730; color: white; }
+        .stDataFrame { background-color: #262730; }
+        .css-1rs6os.edgvbvh3 { color: black !important; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 Sales Forecasting Dashboard")
-st.write("Upload your dataset, choose features, and predict sales using Linear Regression.")
+# Sidebar
+st.sidebar.title("🛠️ Filters")
+uploaded_file = st.sidebar.file_uploader("📂 Upload CSV file", type=["csv"])
 
-uploaded_file = st.file_uploader("📂 Upload your CSV file", type=["csv"])
+# Title
+st.title("📊 Sales Forecasting Dashboard")
+st.write("Upload your dataset and select features to forecast sales using a linear regression model.")
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
-    st.subheader("📄 Uploaded Data Preview")
+
+    st.subheader("🔍 Uploaded Data Preview")
     st.dataframe(df.head())
 
-    all_columns = df.columns.tolist()
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
 
     st.markdown("---")
@@ -39,10 +43,11 @@ if uploaded_file:
 
     col1, col2 = st.columns(2)
     with col1:
-        feature_cols = st.multiselect("✅ Select feature columns:", options=all_columns)
+        feature_cols = st.multiselect("✅ Select feature columns (numeric only):", options=numeric_cols)
     with col2:
         target_col = st.selectbox("🎯 Select target column (numeric only):", options=numeric_cols)
 
+    # Prevent selecting the same column as both feature and target
     if target_col in feature_cols:
         feature_cols.remove(target_col)
 
@@ -60,52 +65,52 @@ if uploaded_file:
             r2 = r2_score(y, predictions)
             mse = mean_squared_error(y, predictions)
 
-            st.markdown("---")
-            st.subheader("📊 Model Performance")
+            # Metrics
+            st.subheader("📈 Model Performance")
             col1, col2 = st.columns(2)
-            col1.metric("R² Score", f"{r2:.4f}", "✅ Good fit" if r2 > 0.7 else "⚠️ Poor fit")
+            col1.metric("R² Score", f"{r2:.4f}", "✅ Good fit" if r2 > 0.7 else "⚠️ Needs improvement")
             col2.metric("Mean Squared Error", f"{mse:,.2f}")
 
-            st.markdown("---")
-            st.subheader("📈 Actual vs Predicted Sales")
+            # Plotting Actual vs Predicted
+            st.subheader("📊 Prediction vs Actual Plot")
             fig, ax = plt.subplots(figsize=(8, 5))
-            ax.scatter(y, predictions, alpha=0.7, label="Predicted vs Actual")
-            ax.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', lw=2, label="Perfect Fit")
-            ax.set_xlabel("Actual Sales")
-            ax.set_ylabel("Predicted Sales")
-            ax.set_title("Actual vs Predicted Comparison")
+            ax.scatter(y, predictions, alpha=0.7, label="Predictions")
+            ax.plot([y.min(), y.max()], [y.min(), y.max()], color='red', linestyle='--', label="Ideal")
+            ax.set_xlabel("Actual")
+            ax.set_ylabel("Predicted")
+            ax.set_title("Actual vs Predicted")
             ax.legend()
             st.pyplot(fig)
 
-            st.markdown("---")
+            # Results Table
             st.subheader("📋 Prediction Results Table")
-            styled_table = data[feature_cols + [target_col, "Predicted"]].style.format("{:.2f}", subset=["Predicted"])
-            st.dataframe(styled_table, use_container_width=True)
+            st.dataframe(data[feature_cols + [target_col, "Predicted"]].style.format(precision=2))
 
-            # Custom Input
-            st.markdown("---")
-            with st.expander("🧪 Predict Custom Input"):
-                st.markdown("Enter values below to predict a custom sale output.")
-                custom_inputs = {}
+            # Custom Prediction Input
+            st.subheader("🧪 Predict on Custom Input")
+            with st.form("custom_input_form"):
+                custom_values = {}
                 for col in feature_cols:
-                    default_val = df[col].iloc[0] if pd.api.types.is_numeric_dtype(df[col]) else ""
-                    value = st.text_input(f"{col}:", value=str(default_val))
-                    try:
-                        value = float(value)
-                    except:
-                        value = 0.0
-                    custom_inputs[col] = value
-
-                if st.button("🚀 Predict Custom Values"):
-                    input_df = pd.DataFrame([custom_inputs])
-                    result = model.predict(input_df)[0]
-                    st.success(f"📌 Predicted {target_col}: **{result:.2f}**")
+                    val = st.number_input(f"Enter value for {col}:", value=float(df[col].mean()))
+                    custom_values[col] = val
+                submitted = st.form_submit_button("🚀 Predict")
+                if submitted:
+                    input_df = pd.DataFrame([custom_values])
+                    prediction = model.predict(input_df)[0]
+                    st.success(f"📌 Predicted {target_col}: {prediction:.2f}")
 
         except Exception as e:
-            st.error(f"❌ Error: {e}")
-
+            st.error(f"❌ Error during prediction: {e}")
     else:
-        st.warning("⚠️ Please select at least one feature and a numeric target column.")
+        st.warning("Please select valid numeric feature(s) and a target column.")
 
 else:
-    st.info("📤 Upload a CSV file to get started.")
+    st.info("Please upload a CSV file to begin.")
+
+# Hide footer & hamburger
+st.markdown("""
+    <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+    </style>
+""", unsafe_allow_html=True)
