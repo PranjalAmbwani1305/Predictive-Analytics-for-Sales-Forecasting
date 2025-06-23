@@ -1,114 +1,79 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
 
-# App config
-st.set_page_config(page_title="📈 Sales Forecast App", layout="wide")
-st.title("📊 Sales Forecasting using Linear Regression")
+# Load data
+@st.cache_data
+def load_data():
+    return pd.read_csv("data.csv")
 
-# Upload file
-uploaded_file = st.sidebar.file_uploader("📂 Upload CSV File", type=["csv"])
+data = load_data()
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    st.subheader("🔍 Preview of Data")
-    st.dataframe(df.head())
+# Define target and features
+target_col = "Item_Outlet_Sales"  # <- change this based on your dataset
+features = ["Item_MRP", "Outlet_Establishment_Year"]  # Add more features as needed
 
-    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+st.title("📈 Predictive Analytics App - Sales Forecast")
 
-    st.sidebar.subheader("⚙️ Configuration")
-    feature_cols = st.sidebar.multiselect("Select Feature Columns", numeric_cols)
-    target_col = st.sidebar.selectbox("Select Target Column", numeric_cols)
-    future_periods = st.sidebar.slider("🔮 Predict Next N Periods", 1, 12, 3)
+# Show raw data
+with st.expander("🔍 Show Raw Data"):
+    st.write(data.head())
 
-    if feature_cols and target_col and target_col not in feature_cols:
-        # Drop missing
-        clean_df = df[feature_cols + [target_col]].dropna()
-        X = clean_df[feature_cols]
-        y = clean_df[target_col]
+# Handle missing values
+if data[features + [target_col]].isnull().any().any():
+    data = data.dropna(subset=features + [target_col])
 
-        # Train model
-        model = LinearRegression()
-        model.fit(X, y)
-        predictions = model.predict(X)
+# Prepare data
+X = data[features]
+y = data[target_col]
 
-        # Metrics
-        r2 = r2_score(y, predictions)
-        mae = mean_absolute_error(y, predictions)
-        mse = mean_squared_error(y, predictions)
-        rmse = np.sqrt(mse)
+# Train/test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        st.sidebar.markdown("### 📈 Model Performance")
-        st.sidebar.write(f"**R²:** {r2:.3f}")
-        st.sidebar.write(f"**MAE:** {mae:.2f}")
-        st.sidebar.write(f"**RMSE:** {rmse:.2f}")
+# Train model
+model = LinearRegression()
+model.fit(X_train, y_train)
 
-        # Show results
-        result_df = clean_df.copy()
-        result_df['Predicted'] = predictions
-        st.subheader("🧾 Actual vs Predicted Table")
-        st.dataframe(result_df.style.highlight_max(axis=0, subset=['Predicted'], color="lightgreen"))
+# Predict
+predictions = model.predict(X_test)
 
-        # 📈 Actual vs Predicted Plot
-        st.subheader("📊 Actual vs Predicted Plot")
-        fig1, ax1 = plt.subplots()
-        ax1.plot(result_df[target_col].values, label='Actual', marker='o')
-        ax1.plot(result_df['Predicted'].values, label='Predicted', marker='x')
-        ax1.set_title("Actual vs Predicted")
-        ax1.set_xlabel("Index")
-        ax1.set_ylabel(target_col)
-        ax1.legend()
-        st.pyplot(fig1)
+# Calculate R2 score
+r2 = r2_score(y_test, predictions)
+st.subheader("Model Performance")
+st.write(f"R-squared (R2) Score: `{r2:.4f}`")
 
-        # 🔮 Future Forecasting (Static assumption: use last known X)
-        st.subheader("📅 Future Forecasting")
-        last_input = X.iloc[-1:].copy()
-        future_preds = []
-        for _ in range(future_periods):
-            next_pred = model.predict(last_input)[0]
-            future_preds.append(next_pred)
-            # You can update last_input dynamically if time-series data available
+# Plot: Actual vs Predicted
+def plot_actual_vs_predicted(actual, predicted, target_label):
+    fig, ax = plt.subplots()
+    ax.scatter(actual, predicted, edgecolor='k', alpha=0.7, label="Predicted Points")
+    ax.plot([actual.min(), actual.max()], [actual.min(), actual.max()], 'r--', lw=2, label='Ideal Line (y = x)')
+    ax.set_xlabel(f"Actual {target_label}")
+    ax.set_ylabel(f"Predicted {target_label}")
+    ax.set_title(f"Actual vs Predicted {target_label}")
+    ax.legend()
+    st.pyplot(fig)
 
-        future_df = pd.DataFrame({
-            "Period": [f"Future {i+1}" for i in range(future_periods)],
-            f"Predicted_{target_col}": future_preds
-        })
-        st.write(future_df)
+plot_actual_vs_predicted(y_test, predictions, target_col)
 
-        # 📉 Future Forecast Plot
-        fig2, ax2 = plt.subplots()
-        ax2.plot(range(len(y)), y, label='Actual', marker='o')
-        ax2.plot(range(len(y)), predictions, label='Predicted', marker='x')
-        ax2.plot(range(len(y), len(y)+future_periods), future_preds, label='Future Forecast', linestyle='--', marker='^')
-        ax2.set_title("Full Sales Forecast")
-        ax2.set_xlabel("Time Index")
-        ax2.set_ylabel(target_col)
-        ax2.legend()
-        st.pyplot(fig2)
+# Custom Prediction Input
+st.subheader("🔮 Predict Custom Input")
+input_data = {}
 
-        # 📥 Download CSV
-        full_df = pd.concat([result_df, pd.DataFrame({
-            col: [np.nan]*future_periods for col in feature_cols
-        }).assign(**{target_col: np.nan, "Predicted": future_preds})], ignore_index=True)
-        st.download_button("📁 Download Predictions", full_df.to_csv(index=False), "predictions.csv", "text/csv")
+for col in features:
+    val = st.number_input(f"Enter {col}", value=float(data[col].mean()))
+    input_data[col] = val
 
-        # 🧪 Custom Prediction
-        st.subheader("🎯 Predict for Custom Values")
-        with st.form("custom_form"):
-            custom_vals = {}
-            for col in feature_cols:
-                val = st.number_input(f"Enter {col}", value=float(X[col].mean()))
-                custom_vals[col] = val
-            predict_btn = st.form_submit_button("📍 Predict Now")
-        if predict_btn:
-            input_df = pd.DataFrame([custom_vals])
-            custom_result = model.predict(input_df)[0]
-            st.success(f"🧾 Predicted {target_col}: **{custom_result:.2f}**")
+if st.button("Predict"):
+    input_df = pd.DataFrame([input_data])
+    custom_pred = model.predict(input_df)[0]
+    st.success(f"Predicted {target_col}: `{custom_pred:.2f}`")
 
-    else:
-        st.warning("Please select valid feature(s) and target column (target ≠ feature).")
-else:
-    st.info("👈 Upload a CSV to begin.")
+# Prediction Table (Optional)
+st.subheader("📊 Sample Predictions")
+sample = X_test.copy()
+sample[target_col] = y_test
+sample["Predicted"] = predictions
+st.dataframe(sample.head(10))
