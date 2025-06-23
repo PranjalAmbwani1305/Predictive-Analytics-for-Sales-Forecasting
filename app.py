@@ -3,96 +3,85 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 
-# Streamlit page config
-st.set_page_config(page_title="📊 Sales Prediction App", layout="wide")
+st.set_page_config(page_title="📈 Sales Prediction App", layout="wide")
 st.title("🛍️ Sales Prediction Dashboard")
 
-# File Upload
+# Upload CSV
 uploaded_file = st.sidebar.file_uploader("📂 Upload your CSV file", type=["csv"])
 
-# Process file
-if uploaded_file is not None:
+if uploaded_file:
     df = pd.read_csv(uploaded_file)
-    st.subheader("📄 Preview of Uploaded Data")
-    st.dataframe(df.head(), use_container_width=True)
+    st.subheader("🔍 Uploaded Data")
+    st.dataframe(df.head())
 
-    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+    numeric_cols = df.select_dtypes(include='number').columns.tolist()
 
-    with st.form("column_selection_form"):
+    with st.form("feature_form"):
         st.subheader("🔧 Select Features and Target")
-        feature_cols = st.multiselect("✅ Select feature columns (numeric only):", numeric_cols)
-        target_col = st.selectbox("🎯 Select target column:", numeric_cols)
-        submitted = st.form_submit_button("🚀 Run Prediction")
+        col1, col2 = st.columns(2)
+        feature_cols = col1.multiselect("✅ Select Feature Columns:", options=numeric_cols)
+        target_col = col2.selectbox("🎯 Select Target Column:", options=numeric_cols)
+        submitted = st.form_submit_button("🚀 Train Model")
 
     if submitted:
-        if not feature_cols:
-            st.error("❗ Please select at least one feature column.")
-        elif target_col in feature_cols:
-            st.error("❗ Target column cannot be one of the features.")
+        if target_col in feature_cols:
+            st.error("⚠️ Target column cannot be one of the feature columns.")
+        elif not feature_cols:
+            st.error("⚠️ Please select at least one feature column.")
         else:
             try:
+                # Clean data
                 data = df[feature_cols + [target_col]].dropna()
                 X = data[feature_cols]
                 y = data[target_col]
 
-                # Train the model
+                # Train model
                 model = LinearRegression()
                 model.fit(X, y)
                 predictions = model.predict(X)
-                data["Predicted"] = predictions
+                data["🔮 Predicted"] = predictions
 
                 # Metrics
                 r2 = r2_score(y, predictions)
                 mae = mean_absolute_error(y, predictions)
-                mse = mean_squared_error(y, predictions)
-                rmse = np.sqrt(mse)
+                rmse = np.sqrt(mean_squared_error(y, predictions))
 
-                # Sidebar metrics
+                # Show metrics in sidebar
                 st.sidebar.subheader("📊 Model Performance")
                 st.sidebar.metric("R² Score", f"{r2:.4f}")
                 st.sidebar.metric("MAE", f"{mae:.2f}")
                 st.sidebar.metric("RMSE", f"{rmse:.2f}")
 
-                # Prediction Results Table with Highlighted Column
+                # Show result table with highlighted predicted column
                 st.subheader("📋 Prediction Results")
-
-                def highlight_predicted(s):
-                    return ['background-color: lightgreen' if col == 'Predicted' else '' for col in s.index]
-
-                styled_df = data.style.apply(lambda x: highlight_predicted(x), axis=1)
-                st.dataframe(styled_df, use_container_width=True)
+                styled_table = data.style.highlight_max(axis=0, subset=["🔮 Predicted"], color='lightgreen')
+                st.dataframe(styled_table, use_container_width=True)
 
                 # Graph
                 st.subheader("📈 Actual vs Predicted")
-
                 fig, ax = plt.subplots(figsize=(8, 5))
-                ax.scatter(y, predictions, color='dodgerblue', alpha=0.7, label="Predicted")
-                ax.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', label='Ideal Fit (y = x)')
-                ax.set_xlabel("Actual Sales")
-                ax.set_ylabel("Predicted Sales")
-                ax.set_title("Linear Regression: Actual vs Predicted")
+                ax.scatter(y, predictions, alpha=0.6, color='skyblue', edgecolor='black', label='Predictions')
+                ax.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', label='Ideal Fit')
+                ax.set_xlabel("Actual")
+                ax.set_ylabel("Predicted")
+                ax.set_title("Actual vs Predicted")
                 ax.legend()
                 st.pyplot(fig)
 
-                # Custom prediction form
-                st.subheader("🧪 Predict Custom Values")
-                with st.form("custom_input_form"):
-                    custom_inputs = {}
-                    for col in feature_cols:
-                        default_val = float(df[col].mean())
-                        val = st.number_input(f"{col}:", value=default_val)
-                        custom_inputs[col] = val
-                    if st.form_submit_button("🔮 Predict"):
-                        input_df = pd.DataFrame([custom_inputs])
-                        result = model.predict(input_df)[0]
-                        st.success(f"📌 Predicted {target_col}: {result:.2f}")
-
-                # Download
-                st.download_button("📥 Download Results as CSV", data.to_csv(index=False), "predictions.csv", "text/csv")
+                # Custom input
+                st.subheader("🧪 Predict for Custom Values")
+                custom_vals = {}
+                col_input = st.columns(len(feature_cols))
+                for i, col in enumerate(feature_cols):
+                    custom_vals[col] = col_input[i].number_input(f"{col}", value=float(X[col].mean()))
+                if st.button("🔮 Predict Custom Sales"):
+                    user_df = pd.DataFrame([custom_vals])
+                    user_pred = model.predict(user_df)[0]
+                    st.success(f"📌 Predicted {target_col}: **{user_pred:.2f}**")
 
             except Exception as e:
-                st.error(f"❌ An error occurred: {e}")
+                st.error(f"❌ Error during model training: {e}")
 else:
-    st.info("📤 Please upload a CSV file to get started.")
+    st.info("Please upload a CSV file to begin.")
