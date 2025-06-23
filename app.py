@@ -22,7 +22,6 @@ if uploaded_file:
     st.sidebar.subheader("⚙️ Configuration")
     feature_cols = st.sidebar.multiselect("Select Feature Columns", numeric_cols)
     target_col = st.sidebar.selectbox("Select Target Column", numeric_cols)
-    future_periods = st.sidebar.slider("🔮 Predict Next N Periods", 1, 12, 3)
 
     if feature_cols and target_col and target_col not in feature_cols:
         # Drop missing
@@ -50,7 +49,7 @@ if uploaded_file:
         result_df = clean_df.copy()
         result_df['Predicted'] = predictions
         st.subheader("🧾 Actual vs Predicted Table")
-        st.dataframe(result_df.style.highlight_max(axis=0, subset=['Predicted'], color="lightgreen"))
+        st.dataframe(result_df)  # No highlighting
 
         # 📊 Actual vs Predicted Scatter Plot
         st.subheader("📊 Actual vs Predicted Sales")
@@ -67,27 +66,6 @@ if uploaded_file:
         ax.grid(True, linestyle='--', alpha=0.5)
         st.pyplot(fig)
 
-        # 🔮 Future Forecasting
-        st.subheader("📅 Future Forecasting")
-        last_input = X.iloc[-1:].copy()
-        future_preds = []
-        for _ in range(future_periods):
-            next_pred = model.predict(last_input)[0]
-            future_preds.append(next_pred)
-            # Optional: update last_input if needed
-
-        future_df = pd.DataFrame({
-            "Period": [f"Future {i+1}" for i in range(future_periods)],
-            f"Predicted_{target_col}": future_preds
-        })
-        st.write(future_df)
-
-        # 📥 Download CSV
-        full_df = pd.concat([result_df, pd.DataFrame({
-            col: [np.nan]*future_periods for col in feature_cols
-        }).assign(**{target_col: np.nan, "Predicted": future_preds})], ignore_index=True)
-        st.download_button("📁 Download Predictions", full_df.to_csv(index=False), "predictions.csv", "text/csv")
-
         # 🧪 Custom Prediction
         st.subheader("🎯 Predict for Custom Values")
         with st.form("custom_form"):
@@ -100,6 +78,9 @@ if uploaded_file:
             input_df = pd.DataFrame([custom_vals])
             custom_result = model.predict(input_df)[0]
             st.success(f"🧾 Predicted {target_col}: **{custom_result:.2f}**")
+
+        # 📥 Download CSV
+        st.download_button("📁 Download Predictions", result_df.to_csv(index=False), "predictions.csv", "text/csv")
 
     else:
         st.warning("Please select valid feature(s) and target column (target ≠ feature).")
