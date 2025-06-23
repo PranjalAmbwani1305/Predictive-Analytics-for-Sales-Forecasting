@@ -52,7 +52,7 @@ if uploaded_file:
         st.subheader("🧾 Actual vs Predicted Table")
         st.dataframe(result_df.style.highlight_max(axis=0, subset=['Predicted'], color="lightgreen"))
 
-        # 📊 Actual vs Predicted Scatter Plot (your expected version)
+        # 📊 Actual vs Predicted Scatter Plot
         st.subheader("📊 Actual vs Predicted Sales")
 
         fig, ax = plt.subplots(figsize=(8, 6))
@@ -74,24 +74,13 @@ if uploaded_file:
         for _ in range(future_periods):
             next_pred = model.predict(last_input)[0]
             future_preds.append(next_pred)
-            # Optional: update last_input if time-dependent
+            # Optional: update last_input if needed
 
         future_df = pd.DataFrame({
             "Period": [f"Future {i+1}" for i in range(future_periods)],
             f"Predicted_{target_col}": future_preds
         })
         st.write(future_df)
-
-        # 📉 Future Forecast Plot
-        fig2, ax2 = plt.subplots()
-        ax2.plot(range(len(y)), y, label='Actual', marker='o')
-        ax2.plot(range(len(y)), predictions, label='Predicted', marker='x')
-        ax2.plot(range(len(y), len(y)+future_periods), future_preds, label='Future Forecast', linestyle='--', marker='^')
-        ax2.set_title("Full Sales Forecast")
-        ax2.set_xlabel("Time Index")
-        ax2.set_ylabel(target_col)
-        ax2.legend()
-        st.pyplot(fig2)
 
         # 📥 Download CSV
         full_df = pd.concat([result_df, pd.DataFrame({
