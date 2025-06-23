@@ -2,133 +2,117 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import matplotlib.pyplot as plt
 
+# Streamlit Config
 st.set_page_config(page_title="📊 Sales Forecasting App", layout="wide")
+st.title("📈 Sales Forecasting with Linear Regression")
 
-st.title("📈 Sales Forecasting App with Linear Regression")
-
-# Upload CSV file
+# Upload CSV
 uploaded_file = st.sidebar.file_uploader("📂 Upload your CSV file", type=["csv"])
 
-if uploaded_file:
+if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     st.subheader("📄 Preview of Uploaded Data")
     st.dataframe(df.head())
 
-    numeric_cols = df.select_dtypes(include='number').columns.tolist()
+    # Filter numeric columns
+    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
 
-    if len(numeric_cols) < 2:
-        st.error("❌ The dataset must contain at least two numeric columns.")
-    else:
-        with st.form("column_selection"):
-            st.subheader("🧩 Select Features and Target")
-            feature_cols = st.multiselect("✅ Feature columns (independent variables):", numeric_cols)
-            target_col = st.selectbox("🎯 Target column (dependent variable):", numeric_cols)
-            submit_btn = st.form_submit_button("🚀 Run Prediction")
+    with st.form("config"):
+        st.subheader("⚙️ Model Configuration")
+        feature_cols = st.multiselect("✅ Select Feature Columns:", options=numeric_cols)
+        target_col = st.selectbox("🎯 Select Target Column:", options=numeric_cols)
+        future_periods = st.number_input("🔮 Predict how many future periods?", min_value=1, max_value=36, value=3)
+        submit = st.form_submit_button("🚀 Run Model")
 
-        if submit_btn:
-            if not feature_cols or target_col in feature_cols:
-                st.error("⚠️ Please select valid features and a distinct target.")
-            else:
-                try:
-                    data = df[feature_cols + [target_col]].dropna()
-                    X = data[feature_cols]
-                    y = data[target_col]
+    if submit:
+        if not feature_cols or target_col in feature_cols:
+            st.error("❗ Please choose valid feature(s) and ensure target is not in features.")
+        else:
+            # Clean and split data
+            data = df[feature_cols + [target_col]].dropna()
+            X = data[feature_cols]
+            y = data[target_col]
 
-                    model = LinearRegression()
-                    model.fit(X, y)
+            model = LinearRegression()
+            model.fit(X, y)
+            predictions = model.predict(X)
 
-                    predictions = model.predict(X)
-                    data['Predicted_' + target_col] = predictions
+            data['Predicted_' + target_col] = predictions
 
-                    # Sidebar Metrics
-                    st.sidebar.subheader("📉 Model Metrics")
-                    r2 = r2_score(y, predictions)
-                    mae = mean_absolute_error(y, predictions)
-                    rmse = np.sqrt(mean_squared_error(y, predictions))
+            # Metrics
+            r2 = r2_score(y, predictions)
+            mae = mean_absolute_error(y, predictions)
+            mse = mean_squared_error(y, predictions)
+            rmse = np.sqrt(mse)
 
-                    st.sidebar.metric("R² Score", f"{r2:.4f}")
-                    st.sidebar.metric("MAE", f"{mae:.2f}")
-                    st.sidebar.metric("RMSE", f"{rmse:.2f}")
+            st.sidebar.markdown("### 📊 Model Metrics")
+            st.sidebar.write(f"**R² Score:** {r2:.3f}")
+            st.sidebar.write(f"**MAE:** {mae:.2f}")
+            st.sidebar.write(f"**RMSE:** {rmse:.2f}")
 
-                    # Show Prediction Table
-                    st.subheader("📊 Prediction Results")
-                    styled_table = data.style.highlight_max(axis=0, subset=['Predicted_' + target_col], color='lightgreen')
-                    st.dataframe(styled_table)
+            # Show Table
+            st.subheader("🧾 Prediction Results")
+            st.dataframe(data.style.highlight_max(axis=0, subset=['Predicted_' + target_col], color="lightgreen"))
 
-                    # Graph: Actual vs Predicted
-                    st.subheader("📉 Actual vs Predicted Line Plot")
-                    fig, ax = plt.subplots()
-                    ax.plot(y.values, label="Actual", marker='o')
-                    ax.plot(predictions, label="Predicted", marker='x')
-                    ax.set_title("Actual vs Predicted Values")
-                    ax.set_xlabel("Data Points")
-                    ax.set_ylabel(target_col)
-                    ax.legend()
-                    st.pyplot(fig)
+            # Custom Prediction Form
+            st.subheader("🧪 Predict for Custom Input")
+            with st.form("custom"):
+                custom_inputs = {}
+                for col in feature_cols:
+                    custom_inputs[col] = st.number_input(f"🔢 {col}", value=float(data[col].mean()))
+                predict_button = st.form_submit_button("📍 Predict")
 
-                    # Future Prediction Section
-                    st.subheader("🔮 Predict Future Sales")
-                    future_periods = st.number_input("📅 Number of future periods to predict", min_value=1, max_value=12, value=3)
-                    future_inputs = []
+            if predict_button:
+                input_df = pd.DataFrame([custom_inputs])
+                custom_pred = model.predict(input_df)[0]
+                st.success(f"✅ Predicted {target_col}: **{custom_pred:.2f}**")
 
-                    st.write("🔢 Enter values for each feature for future periods:")
+            # Predict Future
+            st.subheader("🔮 Predict Future (Trend)")
+            last_known = data[feature_cols].iloc[-1].values.reshape(1, -1)
+            future_preds = []
+            future_inputs = last_known.copy()
 
-                    for i in range(future_periods):
-                        st.markdown(f"**Period {i+1}**")
-                        row = []
-                        for col in feature_cols:
-                            row.append(st.number_input(f"{col} (Period {i+1})", key=f"{col}_{i}"))
-                        future_inputs.append(row)
+            for _ in range(future_periods):
+                next_pred = model.predict(future_inputs)[0]
+                future_preds.append(next_pred)
+                # Optionally modify future_inputs to simulate change
 
-                    if st.button("Predict Future"):
-                        try:
-                            future_df = pd.DataFrame(future_inputs, columns=feature_cols)
-                            future_preds = model.predict(future_df)
-                            future_df['Predicted_' + target_col] = future_preds
-                            st.success("✅ Future predictions done.")
-                            st.dataframe(future_df)
+            future_df = pd.DataFrame({
+                "Period": [f"Future {i+1}" for i in range(future_periods)],
+                f"Predicted_{target_col}": future_preds
+            })
+            st.write(future_df)
 
-                            # Future plot
-                            fig2, ax2 = plt.subplots()
-                            ax2.plot(future_preds, label='Future Prediction', marker='o', linestyle='--', color='purple')
-                            ax2.set_title("🔮 Future Sales Forecast")
-                            ax2.set_xlabel("Future Period")
-                            ax2.set_ylabel(target_col)
-                            ax2.legend()
-                            st.pyplot(fig2)
-                        except Exception as e:
-                            st.error(f"❌ Error predicting future values: {e}")
+            # Plot Actual vs Predicted
+            st.subheader("📉 Actual vs Predicted")
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.plot(y.values, label="Actual", marker='o')
+            ax.plot(predictions, label="Predicted", marker='x')
+            ax.set_title("Actual vs Predicted Sales")
+            ax.set_xlabel("Data Points")
+            ax.set_ylabel(target_col)
+            ax.legend()
+            st.pyplot(fig)
 
-                    # Custom Input Prediction
-                    st.subheader("🧪 Predict for Custom Input")
-                    with st.form("custom_input_form"):
-                        custom_vals = []
-                        for col in feature_cols:
-                            val = st.number_input(f"{col} (custom)", value=float(X[col].mean()), key=f"custom_{col}")
-                            custom_vals.append(val)
-                        custom_submit = st.form_submit_button("🔍 Predict")
+            # Plot Future Trend
+            st.subheader("📊 Future Trend Forecast")
+            plt.figure(figsize=(10, 4))
+            plt.plot(range(len(y)), y, label="Historical", marker='o')
+            plt.plot(range(len(y), len(y) + future_periods), future_preds, label="Future Forecast", marker='x', linestyle="--")
+            plt.title("Future Sales Forecast")
+            plt.xlabel("Time Periods")
+            plt.ylabel(target_col)
+            plt.legend()
+            st.pyplot(plt)
 
-                    if custom_submit:
-                        try:
-                            input_df = pd.DataFrame([custom_vals], columns=feature_cols)
-                            pred = model.predict(input_df)[0]
-                            st.success(f"✅ Predicted {target_col}: **{pred:.2f}**")
-                        except Exception as e:
-                            st.error(f"❌ Custom input prediction error: {e}")
-
-                    # Download button
-                    st.download_button(
-                        label="📥 Download Prediction Results",
-                        data=data.to_csv(index=False),
-                        file_name="sales_predictions.csv",
-                        mime="text/csv"
-                    )
-
-                except Exception as e:
-                    st.error(f"❌ Processing error: {e}")
+            # Download
+            download_df = pd.concat([data, pd.DataFrame(future_preds, columns=[f"Predicted_{target_col}"])], axis=0)
+            csv = download_df.to_csv(index=False)
+            st.download_button("📥 Download Full Prediction CSV", csv, "predictions.csv", "text/csv")
 
 else:
-    st.info("📂 Please upload a CSV file to begin.")
+    st.info("Please upload a dataset to start.")
