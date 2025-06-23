@@ -3,47 +3,37 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-# Set up page
-st.set_page_config(page_title="🛒 Sales Prediction App", layout="wide")
-st.title("🛒 Sales Prediction App")
+st.set_page_config(layout="wide")
 
-# Sidebar: Upload CSV
-with st.sidebar:
-    st.header("📂 Upload Data")
-    uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
-    
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
-        st.success("✅ Data uploaded!")
+# Sidebar
+st.sidebar.header("📂 Upload Data")
+uploaded_file = st.sidebar.file_uploader("Upload your CSV file", type=["csv"])
 
-        # Model Metrics
-        st.markdown("### 📈 Model Metrics")
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
+    st.success("✅ Data uploaded successfully!")
 
-# Main Panel
-if uploaded_file:
-    st.subheader("📄 Preview Data")
+    # Show Preview
+    st.markdown("## 🛒 Sales Prediction App")
+    st.subheader("📊 Preview Data")
     st.dataframe(df.head())
 
-    # Feature + Target Selection
-    st.subheader("🎯 Select Features and Target")
-    feature_cols = st.multiselect("Select Feature Columns (numeric only):", numeric_cols)
-    target_col = st.selectbox("Select Target Column:", [col for col in numeric_cols if col not in feature_cols])
+    # Feature & Target selection
+    st.markdown("## 🎯 Select Features and Target")
 
-    if feature_cols and target_col:
-        # Drop NA
-        data = df[feature_cols + [target_col]].dropna()
-        X = data[feature_cols]
-        y = data[target_col]
+    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
 
-        # Train Model
+    selected_features = st.multiselect("Select Feature Columns (numeric only):", numeric_cols)
+    target = st.selectbox("Select Target Column:", numeric_cols)
+
+    if selected_features and target:
+        X = df[selected_features]
+        y = df[target]
+
         model = LinearRegression()
         model.fit(X, y)
         predictions = model.predict(X)
-        data['Predicted'] = predictions
 
         # Metrics
         r2 = r2_score(y, predictions)
@@ -51,44 +41,19 @@ if uploaded_file:
         mse = mean_squared_error(y, predictions)
         rmse = np.sqrt(mse)
 
-        # Show metrics in sidebar
         with st.sidebar:
+            st.subheader("📈 Model Metrics")
             st.metric("R² Score", f"{r2:.3f}")
             st.metric("MAE", f"{mae:.2f}")
             st.metric("RMSE", f"{rmse:.2f}")
 
-        # Highlight Predicted Column
-        def highlight_pred(s):
-            return ['background-color: #FFD700' if col == 'Predicted' else '' for col in s.index]
-
-        st.subheader("📊 Prediction Results")
-        st.dataframe(data.style.apply(highlight_pred, axis=1))
-
-        # 📈 Chart
-        st.subheader("📈 Actual vs Predicted")
-        fig, ax = plt.subplots(figsize=(10, 5))
-        sns.regplot(x=y, y=predictions, line_kws={"color": "red"}, ax=ax)
-        ax.set_xlabel("Actual")
-        ax.set_ylabel("Predicted")
-        ax.set_title("Actual vs Predicted Sales")
-        st.pyplot(fig)
-
-        # 📅 Custom Prediction
-        st.subheader("🔮 Predict for Custom Input")
-        custom_inputs = []
-        cols = st.columns(len(feature_cols))
-        for i, col in enumerate(feature_cols):
-            val = cols[i].number_input(f"{col}", value=float(X[col].mean()))
-            custom_inputs.append(val)
-
-        if st.button("📌 Predict Custom Value"):
-            custom_pred = model.predict([custom_inputs])[0]
-            st.success(f"📈 Predicted Sales: {custom_pred:.2f}")
-
-        # 📥 Download
-        st.download_button("📥 Download Predictions as CSV", data.to_csv(index=False), file_name="predictions.csv")
+        # Prediction Table
+        st.markdown("## 📋 Prediction Results")
+        result_df = df.copy()
+        result_df["🔮 Prediction"] = predictions
+        st.dataframe(result_df.style.highlight_max(axis=0, subset=["🔮 Prediction"], color='lightgreen'))
 
     else:
-        st.warning("⚠️ Please select at least one feature and a different target column.")
+        st.warning("Please select both features and target to proceed.")
 else:
-    st.info("👆 Upload a CSV file to begin.")
+    st.info("Upload a CSV file to get started.")
