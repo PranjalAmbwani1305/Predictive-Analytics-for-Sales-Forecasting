@@ -4,69 +4,100 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Set app title
-st.set_page_config(layout="wide")
-st.title("🛒 Sales Prediction App")
+st.set_page_config(page_title="🔮 Sales Prediction App", layout="wide")
+st.title("🛍️ Sales Prediction App")
 
-# Upload CSV file
-st.sidebar.header("Upload Data")
-uploaded_file = st.sidebar.file_uploader("Upload your CSV file", type=["csv"])
+# Upload CSV
+uploaded_file = st.sidebar.file_uploader("📂 Upload your CSV file", type=["csv"])
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
-    st.success("✅ Data uploaded successfully!")
-
-    # Show preview
-    st.subheader("🔍 Preview Data")
+    st.subheader("📄 Uploaded Data Preview")
     st.dataframe(df.head())
 
-    # Select feature and target
-    st.subheader("🎯 Select Features and Target")
+    # Numeric columns only
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
 
-    feature_cols = st.multiselect("Select Feature Columns (numeric only):", options=numeric_cols)
-    target_col = st.selectbox("Select Target Column:", options=numeric_cols)
+    if not numeric_cols:
+        st.error("❌ No numeric columns found.")
+    else:
+        with st.form("selection_form"):
+            st.subheader("🔧 Select Features and Target")
+            feature_cols = st.multiselect("✅ Feature columns (numeric only):", options=numeric_cols)
+            target_col = st.selectbox("🎯 Target column:", options=numeric_cols)
+            submitted = st.form_submit_button("🚀 Train & Predict")
 
-    if feature_cols and target_col:
-        # Clean data
-        df_clean = df[feature_cols + [target_col]].dropna()
-        X = df_clean[feature_cols]
-        y = df_clean[target_col].astype(float)
+        if submitted:
+            if not feature_cols:
+                st.error("Please select feature columns.")
+            elif target_col in feature_cols:
+                st.error("Target column must not be among features.")
+            else:
+                try:
+                    # Clean and prepare data
+                    data = df[feature_cols + [target_col]].dropna()
+                    X = data[feature_cols]
+                    y = data[target_col]
 
-        # Model training
-        model = LinearRegression()
-        model.fit(X, y)
-        y_pred = model.predict(X)
+                    # Train model
+                    model = LinearRegression()
+                    model.fit(X, y)
+                    predictions = model.predict(X)
 
-        # Evaluation
-        r2 = r2_score(y, y_pred)
-        mae = mean_absolute_error(y, y_pred)
-        rmse = np.sqrt(mean_squared_error(y, y_pred))
+                    # Add predictions
+                    data['Predicted_' + target_col] = predictions
 
-        # Show metrics
-        st.sidebar.subheader("📈 Model Metrics")
-        st.sidebar.metric("R² Score", f"{r2:.3f}")
-        st.sidebar.metric("MAE", f"{mae:.2f}")
-        st.sidebar.metric("RMSE", f"{rmse:.2f}")
+                    # Metrics in sidebar
+                    r2 = r2_score(y, predictions)
+                    mae = mean_absolute_error(y, predictions)
+                    mse = mean_squared_error(y, predictions)
+                    rmse = np.sqrt(mse)
 
-        # Prediction Results
-        st.subheader("📊 Prediction Results")
-        df_results = df_clean.copy()
-        df_results["Predicted_" + target_col] = y_pred
-        st.dataframe(df_results[[target_col] + feature_cols + ["Predicted_" + target_col]])
+                    st.sidebar.markdown("### 📊 Model Metrics")
+                    st.sidebar.metric("R² Score", f"{r2:.3f}")
+                    st.sidebar.metric("MAE", f"{mae:.2f}")
+                    st.sidebar.metric("RMSE", f"{rmse:.2f}")
 
-        # Plot Actual vs Predicted
-        st.subheader("📉 Actual vs Predicted")
+                    # Table with highlight
+                    st.subheader("📊 Prediction Results Table")
+                    st.dataframe(
+                        data.style.highlight_max(axis=0, subset=['Predicted_' + target_col], color='lightgreen')
+                    )
 
-        fig, ax = plt.subplots()
-        ax.scatter(y, y_pred, color='skyblue', edgecolors='black', label="Predicted Points")
-        ax.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', label="Ideal Line (y = x)")
-        ax.set_xlabel("Actual")
-        ax.set_ylabel("Predicted")
-        ax.set_title("Actual vs Predicted Sales")
-        ax.legend()
-        st.pyplot(fig)
+                    # Plot Actual vs Predicted
+                    st.subheader("📈 Actual vs Predicted")
+                    fig, ax = plt.subplots(figsize=(8, 5))
+                    sns.scatterplot(x=y, y=predictions, ax=ax, color='blue', edgecolor='black')
+                    ax.plot([y.min(), y.max()], [y.min(), y.max()], 'r--')
+                    ax.set_xlabel("Actual")
+                    ax.set_ylabel("Predicted")
+                    ax.set_title("Actual vs Predicted")
+                    st.pyplot(fig)
 
+                    # Custom input prediction
+                    st.subheader("✍️ Predict with Custom Input")
+                    with st.form("custom_input_form"):
+                        custom_inputs = {}
+                        for col in feature_cols:
+                            default_val = float(X[col].mean())
+                            custom_inputs[col] = st.number_input(f"{col}", value=default_val)
+                        custom_submit = st.form_submit_button("Predict")
+                    if custom_submit:
+                        input_df = pd.DataFrame([custom_inputs])
+                        custom_prediction = model.predict(input_df)[0]
+                        st.success(f"📢 Predicted {target_col}: **{custom_prediction:.2f}**")
+
+                    # Download CSV
+                    st.download_button(
+                        "📥 Download Results",
+                        data.to_csv(index=False),
+                        file_name="predictions.csv",
+                        mime="text/csv"
+                    )
+
+                except Exception as e:
+                    st.error(f"❌ An error occurred: {e}")
 else:
-    st.info("⬆️ Please upload a CSV file to begin.")
+    st.info("📤 Please upload a CSV file to get started.")
