@@ -10,18 +10,20 @@ st.set_page_config(page_title="Sales Forecasting", layout="wide")
 # Title
 st.title("📊 Predictive Analytics for Sales Forecasting")
 
-# Load data
-@st.cache_data
-def load_data():
-    uploaded_file = st.file_uploader("📂 Upload your dataset (CSV format)", type=["csv"])
-    if uploaded_file is not None:
-        data = pd.read_csv(uploaded_file)
-        return data
-    else:
-        st.warning("Please upload a dataset.")
-        st.stop()
+# File uploader should be outside of cache
+uploaded_file = st.file_uploader("📂 Upload your dataset (CSV format)", type=["csv"])
 
-data = load_data()
+# Load data (cache only reading, not widget)
+@st.cache_data
+def load_data(uploaded_file):
+    return pd.read_csv(uploaded_file)
+
+# Use uploaded data
+if uploaded_file is not None:
+    data = load_data(uploaded_file)
+else:
+    st.warning("Please upload a dataset.")
+    st.stop()
 
 # Show dataset preview
 st.subheader("📄 Dataset Preview")
