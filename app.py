@@ -1,79 +1,73 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import numpy as np
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import r2_score
+import matplotlib.pyplot as plt
+
+st.set_page_config(page_title="Sales Forecasting", layout="wide")
+
+# Title
+st.title("📊 Predictive Analytics for Sales Forecasting")
 
 # Load data
 @st.cache_data
 def load_data():
-    return pd.read_csv("data.csv")
+    uploaded_file = st.file_uploader("📂 Upload your dataset (CSV format)", type=["csv"])
+    if uploaded_file is not None:
+        data = pd.read_csv(uploaded_file)
+        return data
+    else:
+        st.warning("Please upload a dataset.")
+        st.stop()
 
 data = load_data()
 
-# Define target and features
-target_col = "Item_Outlet_Sales"  # <- change this based on your dataset
-features = ["Item_MRP", "Outlet_Establishment_Year"]  # Add more features as needed
+# Show dataset preview
+st.subheader("📄 Dataset Preview")
+st.write(data.head())
 
-st.title("📈 Predictive Analytics App - Sales Forecast")
+# Check required columns
+required_columns = ['Item_MRP', 'Outlet_Establishment_Year']
+if not all(col in data.columns for col in required_columns):
+    st.error(f"Dataset must include columns: {required_columns}")
+    st.stop()
 
-# Show raw data
-with st.expander("🔍 Show Raw Data"):
-    st.write(data.head())
-
-# Handle missing values
-if data[features + [target_col]].isnull().any().any():
-    data = data.dropna(subset=features + [target_col])
-
-# Prepare data
-X = data[features]
-y = data[target_col]
-
-# Train/test split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# Split features and target
+X = data[['Item_MRP']]
+y = data['Outlet_Establishment_Year']
 
 # Train model
 model = LinearRegression()
-model.fit(X_train, y_train)
+model.fit(X, y)
 
 # Predict
-predictions = model.predict(X_test)
+data['Predicted_Outlet_Establishment_Year'] = model.predict(X)
 
-# Calculate R2 score
-r2 = r2_score(y_test, predictions)
-st.subheader("Model Performance")
-st.write(f"R-squared (R2) Score: `{r2:.4f}`")
+# R² score
+r2 = r2_score(y, data['Predicted_Outlet_Establishment_Year'])
 
-# Plot: Actual vs Predicted
-def plot_actual_vs_predicted(actual, predicted, target_label):
-    fig, ax = plt.subplots()
-    ax.scatter(actual, predicted, edgecolor='k', alpha=0.7, label="Predicted Points")
-    ax.plot([actual.min(), actual.max()], [actual.min(), actual.max()], 'r--', lw=2, label='Ideal Line (y = x)')
-    ax.set_xlabel(f"Actual {target_label}")
-    ax.set_ylabel(f"Predicted {target_label}")
-    ax.set_title(f"Actual vs Predicted {target_label}")
-    ax.legend()
-    st.pyplot(fig)
+# Show prediction results
+st.subheader("📋 Prediction Results")
+st.write(data[['Item_MRP', 'Outlet_Establishment_Year', 'Predicted_Outlet_Establishment_Year']].head(10))
 
-plot_actual_vs_predicted(y_test, predictions, target_col)
+# Plot Actual vs Predicted
+st.subheader("📈 Actual vs Predicted Sales")
+fig, ax = plt.subplots()
+ax.scatter(y, data['Predicted_Outlet_Establishment_Year'], edgecolor='black', alpha=0.75, label="Predicted Points")
+ax.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', label='Ideal Line (y = x)')
+ax.set_xlabel("Actual Sales")
+ax.set_ylabel("Predicted Sales")
+ax.set_title("Actual vs Predicted Sales")
+ax.legend()
+st.pyplot(fig)
 
-# Custom Prediction Input
-st.subheader("🔮 Predict Custom Input")
-input_data = {}
+# Show R² Score
+st.success(f"Model R² Score: {r2:.4f}")
 
-for col in features:
-    val = st.number_input(f"Enter {col}", value=float(data[col].mean()))
-    input_data[col] = val
-
-if st.button("Predict"):
-    input_df = pd.DataFrame([input_data])
-    custom_pred = model.predict(input_df)[0]
-    st.success(f"Predicted {target_col}: `{custom_pred:.2f}`")
-
-# Prediction Table (Optional)
-st.subheader("📊 Sample Predictions")
-sample = X_test.copy()
-sample[target_col] = y_test
-sample["Predicted"] = predictions
-st.dataframe(sample.head(10))
+# Section: Predict with custom input
+st.subheader("🧮 Predict for Custom Input")
+custom_mrp = st.number_input("Enter Item MRP:", min_value=0.0, format="%.2f")
+if st.button("Predict Establishment Year"):
+    custom_pred = model.predict(np.array([[custom_mrp]]))[0]
+    st.info(f"Predicted Outlet Establishment Year: **{custom_pred:.2f}**")
