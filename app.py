@@ -4,11 +4,10 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import matplotlib.pyplot as plt
-from io import StringIO
 
 # App config
 st.set_page_config(page_title="📈 Sales Forecast App", layout="wide")
-st.title("📊 Sales Forecasting")
+st.title("📊 Sales Forecasting using Linear Regression")
 
 # Upload file
 uploaded_file = st.sidebar.file_uploader("📂 Upload CSV File", type=["csv"])
@@ -19,10 +18,6 @@ if uploaded_file:
     st.dataframe(df.head())
 
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
-
-    if len(numeric_cols) < 2:
-        st.error("The uploaded file must contain at least two numeric columns.")
-        st.stop()
 
     st.sidebar.subheader("⚙️ Configuration")
     feature_cols = st.sidebar.multiselect("Select Feature Columns", numeric_cols)
@@ -54,18 +49,16 @@ if uploaded_file:
         result_df = clean_df.copy()
         result_df['Predicted'] = predictions
         st.subheader("🧾 Actual vs Predicted Table")
-        st.dataframe(result_df)
+        st.dataframe(result_df)  # No highlighting
 
         # 📊 Actual vs Predicted Scatter Plot
         st.subheader("📊 Actual vs Predicted Sales")
+
         fig, ax = plt.subplots(figsize=(8, 6))
-        ax.scatter(result_df[target_col], result_df['Predicted'],
-                   edgecolors='black', alpha=0.7, label='Predicted Points')
-        lims = [min(result_df[target_col].min(), result_df['Predicted'].min()),
-                max(result_df[target_col].max(), result_df['Predicted'].max())]
-        ax.plot(lims, lims, 'r--', label='Ideal Line (y = x)')
-        ax.set_xlim(lims)
-        ax.set_ylim(lims)
+        ax.scatter(result_df[target_col], result_df['Predicted'], edgecolors='black', alpha=0.7, label='Predicted Points')
+        ax.plot([result_df[target_col].min(), result_df[target_col].max()],
+                [result_df[target_col].min(), result_df[target_col].max()],
+                'r--', label='Ideal Line (y = x)')
         ax.set_xlabel("Actual Sales", fontsize=12)
         ax.set_ylabel("Predicted Sales", fontsize=12)
         ax.set_title("Actual vs Predicted Sales", fontsize=14)
@@ -86,35 +79,8 @@ if uploaded_file:
             custom_result = model.predict(input_df)[0]
             st.success(f"🧾 Predicted {target_col}: **{custom_result:.2f}**")
 
-        # 📥 Download Predictions CSV
-        st.download_button(
-            "📁 Download Predictions",
-            result_df.to_csv(index=False),
-            "predictions.csv",
-            "text/csv"
-        )
-
-        # 📄 Summary Report Download
-        st.subheader("📄 Download Summary Report")
-        summary = StringIO()
-        summary.write("📊 Sales Forecasting Summary Report\n")
-        summary.write("="*40 + "\n\n")
-        summary.write("🗂 Selected Features:\n")
-        summary.write(", ".join(feature_cols) + "\n\n")
-        summary.write(f"🎯 Target Column:\n{target_col}\n\n")
-        summary.write("📈 Model Performance:\n")
-        summary.write(f"- R² Score: {r2:.3f}\n")
-        summary.write(f"- Mean Absolute Error (MAE): {mae:.2f}\n")
-        summary.write(f"- Root Mean Squared Error (RMSE): {rmse:.2f}\n\n")
-        summary.write(f"📅 Rows used for training: {len(clean_df)}\n")
-        summary.write(f"📁 Original file name: {uploaded_file.name}\n")
-
-        st.download_button(
-            label="📄 Download Summary Report",
-            data=summary.getvalue(),
-            file_name="sales_forecast_summary.txt",
-            mime="text/plain"
-        )
+        # 📥 Download CSV
+        st.download_button("📁 Download Predictions", result_df.to_csv(index=False), "predictions.csv", "text/csv")
 
     else:
         st.warning("Please select valid feature(s) and target column (target ≠ feature).")
