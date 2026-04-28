@@ -16,7 +16,7 @@ This app was developed as part of a predictive analytics project aimed at foreca
 - 📂 Upload your own CSV data
 - 🧼 Automatic data cleaning (handles missing values and invalid rows)
 - 🔢 Select numeric features and target columns for modeling
-- 🤖 Train a Linear Regression model
+- 🤖 Train a model
 - 📊 View prediction results and evaluation metrics (R² score)
 - 📈 Visualize:
   - Actual vs Predicted Sales
