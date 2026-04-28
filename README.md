@@ -58,7 +58,6 @@ This app was developed as part of a predictive analytics project aimed at foreca
 ## 📈 Future Enhancements
 
 - Time-series models (ARIMA, Prophet)
-- Advanced ML (XGBoost, Random Forest)
 - Holiday/promotion feature integration
 - Multi-store or multi-product support
 - Dashboard deployment with authentication
